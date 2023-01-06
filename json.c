@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+
 #define ASSERT(_test_condition)                                 \
        if (!(_test_condition)){                                 \
            printf("ASSERT FAILED! \"%s\" %s:%d\n",          	\
@@ -10,19 +11,27 @@
            abort();                                             \
        }
 
+
 /* Forward decl's */
 struct _JSON_OBJECT;
 struct _JSON_ARRAY;
 
 static struct _JSON_OBJECT* parseJsonObject(char **cursor);
 
+
 typedef enum _JSON_TYPE {
-    TYPE_OBJECT, TYPE_STRING, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_NUMBER
+    TYPE_OBJECT,
+    TYPE_STRING,
+    TYPE_BOOLEAN,
+    TYPE_ARRAY,
+    TYPE_NUMBER
 } JSON_TYPE;
+
 
 typedef struct _JSON_ARRAY {
     int todo;
 } JSON_ARRAY;
+
 
 typedef struct _JSON_VALUE {
 
@@ -38,6 +47,7 @@ typedef struct _JSON_VALUE {
 
 } JSON_VALUE;
 
+
 typedef struct _JSON_MEMBER {
 
     char *Name;
@@ -46,21 +56,27 @@ typedef struct _JSON_MEMBER {
 
 } JSON_MEMBER;
 
+
 typedef struct _JSON_OBJECT {
 
     JSON_MEMBER *Member;
 
 } JSON_OBJECT;
 
-static void skipBlanks(char **cursor) {
+
+static void skipBlanks(char **cursor)
+{
     while (isblank(**cursor)) {
         (*cursor)++;
     }
 }
 
-static char* parseJsonString(char **cursor) {
+
+static char* parseJsonString(char **cursor)
+{
     char *start = NULL;
     char *end = NULL;
+    char *new_string;
 
     /* Find the first " */
     start = strstr(*cursor, "\"");
@@ -71,32 +87,41 @@ static char* parseJsonString(char **cursor) {
     end = strstr(start, "\"");
     ASSERT(end != NULL);
 
-    *end = 0;
     *cursor = end + 1;
 
-    return start;
+    new_string = strndup(start, end - start + 1);
+
+    return new_string;
 }
 
-static int parseJsonBoolean(char **cursor) {
+
+static int parseJsonBoolean(char **cursor)
+{
     if (strncmp(*cursor, "true", 4) == 0) {
         *cursor += 4;
         return 1;
-    } else if (strncmp(*cursor, "false", 5) == 0) {
+    }
+    else if (strncmp(*cursor, "false", 5) == 0) {
         *cursor += 5;
         return 0;
-    } else {
+    }
+    else {
         ASSERT(!"Bad Boolean");
     }
 }
 
-static double parseJsonNumber(char **cursor) {
+
+static double parseJsonNumber(char **cursor)
+{
     char *end = NULL;
     double value = strtod(*cursor, &end);
     *cursor = end;
     return value;
 }
 
-static JSON_VALUE* parseJsonValue(char **cursor) {
+
+static JSON_VALUE* parseJsonValue(char **cursor)
+{
     char *start = NULL;
     JSON_VALUE *value;
 
@@ -112,29 +137,37 @@ static JSON_VALUE* parseJsonValue(char **cursor) {
     if (*start == '"') {
         value->Type = TYPE_STRING;
         value->String = parseJsonString(cursor);
-    } else if (*start == 't') {
+    }
+    else if (*start == 't') {
         value->Type = TYPE_BOOLEAN;
         value->Boolean = parseJsonBoolean(cursor);
-    } else if (*start == 'f') {
+    }
+    else if (*start == 'f') {
         value->Type = TYPE_BOOLEAN;
         value->Boolean = parseJsonBoolean(cursor);
-    } else if (isdigit(*start)) {
+    }
+    else if (isdigit(*start)) {
         value->Type = TYPE_NUMBER;
         value->Number = parseJsonNumber(cursor);
-    } else if (*start == '[') {
+    }
+    else if (*start == '[') {
         value->Type = TYPE_ARRAY;
         //value->String = parseJsonNumber(cursor);
-    } else if (*start == '{') {
+    }
+    else if (*start == '{') {
         value->Type = TYPE_OBJECT;
         value->Object = parseJsonObject(cursor);
-    } else {
+    }
+    else {
         ASSERT(!"Unknown value type");
     }
 
     return value;
 }
 
-static JSON_MEMBER* parseJsonMember(char **cursor) {
+
+static JSON_MEMBER* parseJsonMember(char **cursor)
+{
     JSON_MEMBER *member;
 
     member = (JSON_MEMBER*) malloc(sizeof(JSON_MEMBER));
@@ -156,7 +189,9 @@ static JSON_MEMBER* parseJsonMember(char **cursor) {
     return member;
 }
 
-static JSON_OBJECT* parseJsonObject(char **cursor) {
+
+static JSON_OBJECT* parseJsonObject(char **cursor)
+{
     JSON_OBJECT *object;
     JSON_MEMBER *member;
     JSON_MEMBER *prior_member = NULL;
@@ -173,9 +208,11 @@ static JSON_OBJECT* parseJsonObject(char **cursor) {
 
     do {
         member = parseJsonMember(cursor);
+
         if (!object->Member) {
             object->Member = member;
-        } else {
+        }
+        else {
             prior_member->Next = member;
         }
         prior_member = member;
@@ -186,10 +223,12 @@ static JSON_OBJECT* parseJsonObject(char **cursor) {
         if (**cursor == ',') {
             parsing_in_progress = 1;
             (*cursor)++;
-        } else if (**cursor == '}') {
+        }
+        else if (**cursor == '}') {
             parsing_in_progress = 0;
             (*cursor)++;
-        } else {
+        }
+        else {
             ASSERT(!"Badly formed Object");
         }
 
@@ -198,7 +237,9 @@ static JSON_OBJECT* parseJsonObject(char **cursor) {
     return object;
 }
 
-JSON_OBJECT* JSON_Parse(char *string) {
+
+JSON_OBJECT* JSON_Parse(char *string)
+{
     JSON_OBJECT *object;
 
     object = parseJsonObject(&string);
@@ -206,169 +247,269 @@ JSON_OBJECT* JSON_Parse(char *string) {
     return object;
 }
 
-#define SPACES_PER_INDENTATION 4
-int gIndentLevel = 0;
 
-static void printIndent(void) {
+#define SPACES_PER_INDENTATION 4
+
+
+static void printIndent(int indent_level)
+{
     int i, j;
-    for (i = 0; i < gIndentLevel; i++)
+    for (i = 0; i < indent_level; i++)
         for (j = 0; j < SPACES_PER_INDENTATION; j++)
             printf(" ");
 
 }
 
-// Forward dec'l
-static void printJsonObject(JSON_OBJECT *object);
 
-static void printJsonValue(JSON_VALUE *value) {
+// Forward dec'l
+static void printJsonObject(JSON_OBJECT *object, int *indent_level);
+
+
+static void printJsonValue(JSON_VALUE *value, int *indent_level)
+{
     switch (value->Type) {
 
-    case TYPE_OBJECT:
-        printJsonObject(value->Object);
-        break;
+        case TYPE_OBJECT:
+            printJsonObject(value->Object, indent_level);
+            break;
 
-    case TYPE_ARRAY:
-        break;
+        case TYPE_ARRAY:
+            break;
 
-    case TYPE_STRING:
-        printf("\"%s\"", value->String);
-        break;
+        case TYPE_STRING:
+            printf("\"%s\"", value->String);
+            break;
 
-    case TYPE_BOOLEAN:
-        if (value->Boolean)
-            printf("true");
-        else
-            printf("false");
-        break;
+        case TYPE_BOOLEAN:
+            if (value->Boolean)
+                printf("true");
+            else
+                printf("false");
+            break;
 
-    case TYPE_NUMBER:
-        printf("%f", value->Number);
-        break;
+        case TYPE_NUMBER:
+            printf("%f", value->Number);
+            break;
 
-    default:
-        break;
+        default:
+            break;
     }
 }
 
-static void printJsonMember(JSON_MEMBER *member) {
-    printIndent();
+
+static void printJsonMember(JSON_MEMBER *member, int *indent_level)
+{
+    printIndent(*indent_level);
     printf("\"%s\":", member->Name);
-    printJsonValue(member->Value);
+    printJsonValue(member->Value, indent_level);
 }
 
-static void printJsonObject(JSON_OBJECT *object) {
+
+static void printJsonObject(JSON_OBJECT *object, int *indent_level)
+{
     JSON_MEMBER *member;
     printf("{\n");
-    gIndentLevel++;
+    (*indent_level)++;
+
     member = object->Member;
     while (member) {
-        printJsonMember(member);
+        printJsonMember(member, indent_level);
         member = member->Next;
         if (member) {
             printf(",\n");
         }
     }
-    gIndentLevel--;
+    (*indent_level)--;
     printf("\n");
-    printIndent();
+    printIndent(*indent_level);
     printf("}\n");
 }
 
-void JSON_Print(JSON_OBJECT *object) {
-    printJsonObject(object);
+
+void JSON_Print(JSON_OBJECT *object)
+{
+    int indent_level = 0;
+    printJsonObject(object, &indent_level);
 }
 
-// Forward dec'l
-static char* stringifyJsonObject(JSON_OBJECT *object, char *buffer,
-        int buffer_length);
 
-static void stringifyJsonValue(JSON_VALUE *value) {
-    switch (value->Type) {
+typedef struct _SMART_BUFFER {
 
-    case TYPE_OBJECT:
-        //stringifyJsonObject(value->Object);
-        break;
+    char *buffer;
+    int buffer_length;
+    int length_used;
 
-    case TYPE_ARRAY:
-        break;
+}SMART_BUFFER;
 
-    case TYPE_STRING:
-        printf("\"%s\"", value->String);
-        break;
 
-    case TYPE_BOOLEAN:
-        if (value->Boolean)
-            printf("true");
-        else
-            printf("false");
-        break;
-
-    case TYPE_NUMBER:
-        printf("%f", value->Number);
-        break;
-
-    default:
-        break;
-    }
-}
-
-static void stringifyJsonMember(JSON_MEMBER *member) {
-    printf("\"%s\":", member->Name);
-    stringifyJsonValue(member->Value);
-}
-
-static char* getBuffer(char *buffer, int *buffer_length, int length) {
+static void updateBuffer(SMART_BUFFER *sb)
+{
     //----------------------
     char *new_buffer;
     int new_length = -1;
     int remaining_length;
     //----------------------
 
-    if (*buffer_length <= 0) {
+    if (sb->buffer_length <= 0) {
         new_length = 1024;
-    } else {
-        remaining_length = (*buffer_length) - length;
+    }
+    else {
+        remaining_length = sb->buffer_length - sb->length_used;
 
         if (remaining_length < 512) {
-            new_length = (*buffer_length) + 1024;
+            new_length = sb->buffer_length + 1024;
         }
     }
 
     if (new_length > 0) {
-        new_buffer = (char*) realloc(buffer, new_length);
-        *buffer_length = new_length;
-        return new_buffer;
-    } else {
-        return buffer;
+        new_buffer = (char*) realloc(sb->buffer, new_length);
+        sb->buffer_length = new_length;
+        sb->buffer = new_buffer;
     }
 }
 
-static char* stringifyJsonObject(JSON_OBJECT *object, char *buffer,
-        int *buffer_length, int *length) {
+
+// Forward dec'l
+static void stringifyJsonObject(JSON_OBJECT *object, SMART_BUFFER *sb);
+
+
+static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
+{
+    switch (value->Type) {
+
+        case TYPE_OBJECT:
+            stringifyJsonObject(value->Object, sb);
+            break;
+
+        case TYPE_ARRAY:
+            break;
+
+        case TYPE_STRING:
+            sb->length_used += sprintf( sb->buffer + sb->length_used, "\"%s\"",
+                                        value->String);
+            break;
+
+        case TYPE_BOOLEAN:
+            if (value->Boolean)
+                sb->length_used += sprintf( sb->buffer + sb->length_used, "true");
+            else
+                sb->length_used += sprintf( sb->buffer + sb->length_used, "false");
+            break;
+
+        case TYPE_NUMBER:
+            sb->length_used += sprintf( sb->buffer + sb->length_used, "%f",
+                                        value->Number);
+            break;
+
+        default:
+            break;
+    }
+
+    updateBuffer(sb);
+}
+
+
+static void stringifyJsonMember(JSON_MEMBER *member, SMART_BUFFER *sb)
+{
+    sb->length_used += sprintf( sb->buffer + sb->length_used, "\"%s\":",
+                                member->Name);
+    updateBuffer(sb);
+    stringifyJsonValue(member->Value, sb);
+}
+
+
+static void stringifyJsonObject(JSON_OBJECT *object,
+                                SMART_BUFFER *sb)
+{
     //------------------------
     JSON_MEMBER *member;
     //------------------------
 
-    buffer = getBuffer(buffer, buffer_length, *length) * length += sprintf(
-            buffer + *length, "{");
+    updateBuffer(sb);
+    sb->length_used += sprintf(sb->buffer + sb->length_used, "{");
+
     member = object->Member;
     while (member) {
-        stringifyJsonMember(member);
+        stringifyJsonMember(member, sb);
         member = member->Next;
         if (member) {
-            *length += sprintf(buffer + *length, ",");
+            sb->length_used += sprintf(sb->buffer + sb->length_used, ",");
         }
     }
-    *length += sprintf(buffer + *length, "}");
-
-    return buffer;
+    sb->length_used += sprintf(sb->buffer + sb->length_used, "}");
 }
 
-char* JSON_Stringify(JSON_OBJECT *object) {
-    int length = 0;
-    char *buffer = stringifyJsonObject(object, NULL, 0, &length);
-    return buffer;
+
+char* JSON_Stringify(JSON_OBJECT *object)
+{
+    SMART_BUFFER sb = {0};
+    stringifyJsonObject(object, &sb);
+    return sb.buffer;
 }
+
+// Forward decl'
+static void freeJsonObject(JSON_OBJECT *member);
+
+
+static void freeJsonValue(JSON_VALUE *value)
+{
+    switch (value->Type) {
+
+        case TYPE_OBJECT:
+            freeJsonObject(value->Object);
+            break;
+
+        case TYPE_ARRAY:
+            break;
+
+        case TYPE_STRING:
+            free(value->String);
+            break;
+
+        case TYPE_BOOLEAN:
+            break;
+
+        case TYPE_NUMBER:
+            break;
+
+        default:
+            break;
+    }
+
+    free(value);
+}
+
+
+static void freeJsonMember(JSON_MEMBER *member)
+{
+    free(member->Name);
+    freeJsonValue(member->Value);
+}
+
+
+static void freeJsonObject(JSON_OBJECT *object)
+{
+    //------------------------
+    JSON_MEMBER *member;
+    JSON_MEMBER *prev_member;
+    //------------------------
+
+    member = object->Member;
+    while (member) {
+        freeJsonMember(member);
+        prev_member = member;
+        member = member->Next;
+        free(prev_member);
+    }
+    free(object);
+}
+
+
+void JSON_FreeObject(JSON_OBJECT *object)
+{
+    freeJsonObject(object);
+}
+
 
 int main(void) {
     char test1[] =
@@ -380,17 +521,28 @@ int main(void) {
                     " \"y1\": {\"x2\": 1234, \"y2\" : 765  }  }";
 
     JSON_OBJECT *object;
+    char *buffer;
 
     printf("JSON TEST\n");
 
     object = JSON_Parse(test1);
     JSON_Print(object);
+    buffer = JSON_Stringify(object);
+    printf("%s\n\n", buffer);
+    JSON_FreeObject(object);
 
     object = JSON_Parse(test2);
     JSON_Print(object);
+    buffer = JSON_Stringify(object);
+    printf("%s\n\n", buffer);
+    JSON_FreeObject(object);
 
     object = JSON_Parse(test3);
     JSON_Print(object);
+    buffer = JSON_Stringify(object);
+    printf("%s\n\n", buffer);
+    JSON_FreeObject(object);
+
 
     return 0;
 }
