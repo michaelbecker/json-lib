@@ -24,6 +24,7 @@ typedef enum _JSON_ERROR {
     ERROR_INVALID_BOOLEAN,
     ERROR_INVALID_NUMBER,
     ERROR_INVALID_OBJECT,
+    ERROR_INVALID_ARRAY,
     ERROR_TYPE_MISMATCH,
     ERROR_INVALID_VALUE_TYPE,
     ERROR_MAX_RECURSION,
@@ -32,11 +33,6 @@ typedef enum _JSON_ERROR {
 
 
 extern JSON_ERROR JSON_Errno;
-
-
-typedef struct _JSON_ARRAY {
-    int todo;
-} JSON_ARRAY;
 
 
 typedef struct _JSON_VALUE {
@@ -48,8 +44,10 @@ typedef struct _JSON_VALUE {
         double Number;
         int Boolean;
         struct _JSON_OBJECT *Object;
-        struct _JSON_ARRAY *Array;
+        struct _JSON_VALUE *Array;
     };
+
+    struct _JSON_VALUE *Next;
 
 } JSON_VALUE;
 

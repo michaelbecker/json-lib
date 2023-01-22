@@ -92,17 +92,79 @@ static double parseJsonNumber(char **cursor)
 }
 
 
-static JSON_VALUE* parseJsonValue(char **cursor)
+static JSON_VALUE *allocJsonValue(void)
 {
+    //--------------------------
+    JSON_VALUE *value;
+    //--------------------------
+
+    value = (JSON_VALUE *)malloc(sizeof(JSON_VALUE));
+    if (!value) {
+        JSON_Errno = ERROR_ALLOC_FAILED;
+        return NULL;
+    }
+    memset(value, 0, sizeof(JSON_VALUE));
+    return value;
+}
+
+
+// Forward decl'
+static JSON_VALUE* parseJsonValue(char **cursor);;
+
+
+static JSON_VALUE* parseJsonArray(char **cursor)
+{
+    //------------------------------------
     char *start = NULL;
     JSON_VALUE *value;
+    JSON_VALUE *initial_value;
+    //------------------------------------
 
-    value = (JSON_VALUE*) malloc(sizeof(JSON_VALUE));
+    // Skip the leading [
+    (*cursor)++;
+
+    //  parseJsonValue() does all it's own error checking
+    //  and handling.
+    initial_value = parseJsonValue(cursor);
+    value = initial_value;
+
+    while (1) {
+        // Find the next non-space character
+        skipBlanks(cursor);
+
+        // Decode it
+        start = *cursor;
+        if (*start == ',') {
+            // Skip over the ,
+            (*cursor)++;
+            value->Next = parseJsonValue(cursor);
+            value = value->Next;
+        }
+        else if (*start == ']') {
+            // Skip over the trailing ]
+            (*cursor)++;
+            return initial_value;
+        }
+        else {
+            JSON_Errno = ERROR_INVALID_ARRAY;
+            longjmp(parse_jmp_buffer, 1);
+        }
+    }
+}
+
+
+static JSON_VALUE* parseJsonValue(char **cursor)
+{
+    //--------------------------
+    char *start = NULL;
+    JSON_VALUE *value;
+    //--------------------------
+
+    value = allocJsonValue();
     if (!value){
         JSON_Errno = ERROR_ALLOC_FAILED;
         longjmp(parse_jmp_buffer, 1);
     }
-    memset(value, 0, sizeof(JSON_VALUE));
 
     // Find the next non-space character
     skipBlanks(cursor);
@@ -127,7 +189,7 @@ static JSON_VALUE* parseJsonValue(char **cursor)
     }
     else if (*start == '[') {
         value->Type = TYPE_ARRAY;
-        //value->String = parseJsonNumber(cursor);
+        value->Array = parseJsonArray(cursor);
     }
     else if (*start == '{') {
         value->Type = TYPE_OBJECT;
@@ -737,13 +799,12 @@ static JSON_MEMBER *allocJsonMemberAndValue(char *name)
     memset(member, 0, sizeof(JSON_MEMBER));
     member->Name = strdup(name);
 
-    member->Value = (JSON_VALUE *)malloc(sizeof(JSON_VALUE));
+    member->Value = allocJsonValue();
     if (!member->Value) {
         JSON_Errno = ERROR_ALLOC_FAILED;
         free(member);
         return NULL;
     }
-    memset(member->Value, 0, sizeof(JSON_VALUE));
 
     return member;
 }
