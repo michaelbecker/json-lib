@@ -325,6 +325,22 @@ static void printIndent(int indent_level)
 
 // Forward dec'l
 static void printJsonObject(JSON_OBJECT *object, int *indent_level);
+static void printJsonValue(JSON_VALUE *value, int *indent_level);
+
+
+static void printJsonArray(JSON_VALUE *value, int *indent_level)
+{
+    printf("[ ");
+
+    while (value) {
+        printJsonValue(value, indent_level);
+        value = value->Next;
+        if (value)
+            printf(", ");
+    }
+
+    printf("] ");
+}
 
 
 static void printJsonValue(JSON_VALUE *value, int *indent_level)
@@ -336,6 +352,7 @@ static void printJsonValue(JSON_VALUE *value, int *indent_level)
             break;
 
         case TYPE_ARRAY:
+            printJsonArray(value->Array, indent_level);
             break;
 
         case TYPE_STRING:
@@ -443,6 +460,22 @@ static void updateBuffer(SMART_BUFFER *sb)
 
 // Forward dec'l
 static void stringifyJsonObject(JSON_OBJECT *object, SMART_BUFFER *sb);
+static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb);
+
+
+static void stringifyJsonArray(JSON_VALUE *value, SMART_BUFFER *sb)
+{
+    sb->length_used += sprintf( sb->buffer + sb->length_used, "[");
+
+    while (value) {
+        stringifyJsonValue(value, sb);
+        value = value->Next;
+        if (value)
+            sb->length_used += sprintf( sb->buffer + sb->length_used, ",");
+    }
+
+    sb->length_used += sprintf( sb->buffer + sb->length_used, "]");
+}
 
 
 static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
@@ -454,6 +487,7 @@ static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
             break;
 
         case TYPE_ARRAY:
+            stringifyJsonArray(value->Array, sb);
             break;
 
         case TYPE_STRING:
@@ -936,12 +970,26 @@ int main(void) {
     char test3[] =
             "{ \"x1\" : {\"x2\" : 111, \"y2\" : {\"x3\":100, \"y3\":123, \"z3\":23}},"
                     " \"y1\": {\"x2\": 1234, \"y2\" : 765  }  }";
+    char test4[] =
+            "{ \"A1\" : [1, 2, 3]  }";
+    char test5[] =
+            "{ \"A1\" : [\"Hi A String\", { \"obj\":56} , [12, 13, 14]]  }";
 
     JSON_OBJECT *object;
     char *buffer;
     int b;
 
     printf("JSON TEST\n");
+
+    object = JSON_Parse(test4);
+    JSON_Print(object);
+    buffer = JSON_Stringify(object);
+    printf("%s\n\n", buffer);
+    object = JSON_Parse(test5);
+    JSON_Print(object);
+    buffer = JSON_Stringify(object);
+    printf("%s\n\n", buffer);
+
 
     object = JSON_Parse(test1);
     JSON_Print(object);
