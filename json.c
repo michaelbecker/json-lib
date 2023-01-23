@@ -449,6 +449,7 @@ static void updateBuffer(SMART_BUFFER *sb)
     if (new_length > 0) {
         new_buffer = (char*) realloc(sb->buffer, new_length);
         if (!new_buffer) {
+            free(sb->buffer);
             JSON_Errno = ERROR_ALLOC_FAILED;
             longjmp(stringify_jmp_buffer, 1);
         }
@@ -568,6 +569,21 @@ char* JSON_Stringify(JSON_OBJECT *object)
 
 // Forward decl
 static void freeJsonObject(JSON_OBJECT *member);
+static void freeJsonValue(JSON_VALUE *value);
+
+
+static void freeJsonArray(JSON_VALUE *value)
+{
+    //-----------------------------
+    JSON_VALUE *next_value;
+    //-----------------------------
+
+    while (value) {
+        next_value = value->Next;
+        freeJsonValue(value);
+        value = next_value;
+    }
+}
 
 
 static void freeJsonValue(JSON_VALUE *value)
@@ -579,6 +595,7 @@ static void freeJsonValue(JSON_VALUE *value)
             break;
 
         case TYPE_ARRAY:
+            freeJsonArray(value->Array);
             break;
 
         case TYPE_STRING:
@@ -985,16 +1002,22 @@ int main(void) {
     JSON_Print(object);
     buffer = JSON_Stringify(object);
     printf("%s\n\n", buffer);
+    free(buffer);
+    JSON_FreeObject(object);
+
     object = JSON_Parse(test5);
     JSON_Print(object);
     buffer = JSON_Stringify(object);
     printf("%s\n\n", buffer);
+    free(buffer);
+    JSON_FreeObject(object);
 
 
     object = JSON_Parse(test1);
     JSON_Print(object);
     buffer = JSON_Stringify(object);
     printf("%s\n\n", buffer);
+    free(buffer);
     b = JSON_GetBoolean(object, "x");
     printf("JSON_GetBoolean x = %d\n", b);
     b = JSON_GetBoolean(object, "z");
@@ -1007,6 +1030,7 @@ int main(void) {
     JSON_Print(object);
     buffer = JSON_Stringify(object);
     printf("%s\n\n", buffer);
+    free(buffer);
     b = JSON_GetBoolean(object, "y.y3");
     printf("JSON_GetBoolean y.y3 = %d\n", b);
     JSON_FreeObject(object);
@@ -1015,6 +1039,7 @@ int main(void) {
     JSON_Print(object);
     buffer = JSON_Stringify(object);
     printf("%s\n\n", buffer);
+    free(buffer);
     JSON_FreeObject(object);
 
     object = JSON_AllocObject();
