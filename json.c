@@ -722,6 +722,87 @@ FIND_FAILED:
 }
 
 
+typedef struct DotOrBracket_ {
+    char *Dot;
+    char *Bracket;
+    int BracketFirst;
+    int DotFirst;
+}DotOrBracket;
+
+
+static int getNextDotOrBracket(char *path, DotOrBracket *dob)
+{
+    dob->Bracket = strchr(path, "[");
+    dob->Dot = strchr(path, ".");
+
+    if (!dob->Dot && !dob->Bracket) {
+        dob->BracketFirst = 0;
+        dob->DotFirst = 1;
+    }
+    else if (!dob->Dot) {
+        dob->BracketFirst = 1;
+        dob->DotFirst = 0;
+    }
+    else if (!dob->Bracket) {
+        dob->BracketFirst = 0;
+        dob->DotFirst = 1;
+    }
+    else if (dob->Bracket > dob->Dot) {
+        dob->BracketFirst = 0;
+        dob->DotFirst = 1;
+    }
+    else {
+        dob->BracketFirst = 1;
+        dob->DotFirst = 0;
+    }
+
+    return path[0];
+}
+
+
+static JSON_VALUE *findJsonValue2(char *path, JSON_OBJECT *object)
+{
+    //------------------------
+    JSON_MEMBER *member;
+    char *name;
+    char *path_copy;
+    char *dot;
+    char *bracket;
+    DotOrBracket dob;
+    //------------------------
+
+    path_copy = strdup(path);
+    path = path_copy;
+
+    while (getNextDotOrBracket(path, &dob)) {
+
+        if (dob.DotFirst) {
+            name = strtok(path, ".");
+            member = findJsonMemberInObject(object, name);
+            if (!member)
+                goto FIND_FAILED;
+        }
+        else {
+            // dob.BracketFirst
+            name = strtok(path, "[");
+            //member = findJsonMemberInObject(object, name);
+            //if (!member)
+            //    goto FIND_FAILED;
+        }
+        if (path)
+            path = NULL;
+    }
+
+    // If we make it here, we found the value.
+    free(path_copy);
+    return member->Value;
+
+    // We didn't find the value, so cleanup.
+FIND_FAILED:
+    free(path_copy);
+    return NULL;
+}
+
 JSON_TYPE JSON_GetType(JSON_OBJECT *object, char *path)
 {
     //------------------------
