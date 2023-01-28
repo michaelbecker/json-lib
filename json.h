@@ -32,10 +32,12 @@ typedef enum _JSON_ERROR {
 }JSON_ERROR;
 
 
-extern JSON_ERROR JSON_Errno;
+#define JSON_VALUE_SIGNATURE 0x4A56414C
 
 
 typedef struct _JSON_VALUE {
+
+    int Signature;
 
     JSON_TYPE Type;
 
@@ -52,7 +54,12 @@ typedef struct _JSON_VALUE {
 } JSON_VALUE;
 
 
+#define JSON_MEMBER_SIGNATURE 0x4A4D454D
+
+
 typedef struct _JSON_MEMBER {
+
+    int Signature;
 
     char *Name;
     JSON_VALUE *Value;
@@ -61,7 +68,12 @@ typedef struct _JSON_MEMBER {
 } JSON_MEMBER;
 
 
+#define JSON_OBJECT_SIGNATURE 0x4A4F424A
+
+
 typedef struct _JSON_OBJECT {
+
+    int Signature;
 
     JSON_MEMBER *Member;
 
@@ -83,6 +95,10 @@ JSON_OBJECT *JSON_AllocObject(void);
 JSON_ERROR JSON_AddBoolean(JSON_OBJECT *object, char *name, int value);
 JSON_ERROR JSON_AddString(JSON_OBJECT *object, char *path, char *value);
 JSON_ERROR JSON_AddNumber(JSON_OBJECT *object, char *path, double value);
+
+JSON_ERROR JSON_GetErrno(void);
+
+
 
 
 #endif

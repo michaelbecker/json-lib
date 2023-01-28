@@ -4,12 +4,13 @@
 #include <ctype.h>
 #include <math.h>
 #include <setjmp.h>
+#include <errno.h>
 #include "json.h"
 
 
 #define ASSERT(_test_condition)                                 \
        if (!(_test_condition)){                                 \
-           printf("ASSERT FAILED! \"%s\" %s:%d\n",          	\
+           printf("ASSERT FAILED! \"%s\" %s:%d\n",              \
                         #_test_condition, __FILE__, __LINE__);  \
            abort();                                             \
        }
@@ -22,6 +23,13 @@ static jmp_buf stringify_jmp_buffer;
 JSON_ERROR JSON_Errno;
 
 
+JSON_ERROR JSON_GetErrno(void)
+{
+    return JSON_Errno;
+}
+
+
+// Forward declaration
 static struct _JSON_OBJECT* parseJsonObject(char **cursor);
 
 
@@ -103,13 +111,54 @@ static JSON_VALUE *allocJsonValue(void)
         JSON_Errno = ERROR_ALLOC_FAILED;
         return NULL;
     }
+
     memset(value, 0, sizeof(JSON_VALUE));
+    value->Signature = JSON_VALUE_SIGNATURE;
+
     return value;
 }
 
 
+static JSON_MEMBER *allocJsonMember(void)
+{
+    //---------------------
+    JSON_MEMBER *member;
+    //---------------------
+
+    member = (JSON_MEMBER*) malloc(sizeof(JSON_MEMBER));
+    if (!member){
+        JSON_Errno = ERROR_ALLOC_FAILED;
+        return NULL;
+    }
+
+    memset(member, 0, sizeof(JSON_MEMBER));
+    member->Signature = JSON_MEMBER_SIGNATURE;
+
+    return member;
+}
+
+
+static JSON_OBJECT *allocJsonObject(void)
+{
+    //---------------------------
+    JSON_OBJECT *object;
+    //---------------------------
+
+    object = (JSON_OBJECT*) malloc(sizeof(JSON_OBJECT));
+    if(!object){
+        JSON_Errno = ERROR_ALLOC_FAILED;
+        return NULL;
+    }
+
+    memset(object, 0, sizeof(JSON_OBJECT));
+    object->Signature = JSON_OBJECT_SIGNATURE;
+
+    return object;
+}
+
+
 // Forward decl'
-static JSON_VALUE* parseJsonValue(char **cursor);;
+static JSON_VALUE* parseJsonValue(char **cursor);
 
 
 static JSON_VALUE* parseJsonArray(char **cursor)
@@ -210,9 +259,8 @@ static JSON_MEMBER* parseJsonMember(char **cursor)
     JSON_MEMBER *member;
     //---------------------
 
-    member = (JSON_MEMBER*) malloc(sizeof(JSON_MEMBER));
+    member = allocJsonMember();
     if (!member){
-        JSON_Errno = ERROR_ALLOC_FAILED;
         longjmp(parse_jmp_buffer, 1);
     }
 
@@ -245,15 +293,17 @@ static JSON_OBJECT* parseJsonObject(char **cursor)
     int parsing_in_progress;
     //-----------------------------------------
 
-    object = (JSON_OBJECT*) malloc(sizeof(JSON_OBJECT));
+    object = allocJsonObject();
     if(!object){
-        JSON_Errno = ERROR_ALLOC_FAILED;
         longjmp(parse_jmp_buffer, 1);
     }
-    memset(object, 0, sizeof(JSON_OBJECT));
 
     *cursor = strstr(*cursor, "{");
-    ASSERT((*cursor) != NULL);
+    if ((*cursor) == NULL) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        longjmp(parse_jmp_buffer, 1);
+    }
+
     // Skip past the {
     (*cursor)++;
 
@@ -330,6 +380,8 @@ static void printJsonValue(JSON_VALUE *value, int *indent_level);
 
 static void printJsonArray(JSON_VALUE *value, int *indent_level)
 {
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+
     printf("[ ");
 
     while (value) {
@@ -345,6 +397,8 @@ static void printJsonArray(JSON_VALUE *value, int *indent_level)
 
 static void printJsonValue(JSON_VALUE *value, int *indent_level)
 {
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+
     switch (value->Type) {
 
         case TYPE_OBJECT:
@@ -378,6 +432,8 @@ static void printJsonValue(JSON_VALUE *value, int *indent_level)
 
 static void printJsonMember(JSON_MEMBER *member, int *indent_level)
 {
+    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+
     printIndent(*indent_level);
     printf("\"%s\":", member->Name);
     printJsonValue(member->Value, indent_level);
@@ -389,6 +445,8 @@ static void printJsonObject(JSON_OBJECT *object, int *indent_level)
     //--------------------------
     JSON_MEMBER *member;
     //--------------------------
+
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
 
     printf("{\n");
     (*indent_level)++;
@@ -414,12 +472,21 @@ void JSON_Print(JSON_OBJECT *object)
     int indent_level = 0;
     //--------------------------
 
+    JSON_Errno = SUCCESS;
+
+    if (object->Signature != JSON_OBJECT_SIGNATURE)
+        JSON_Errno = ERROR_INVALID_OBJECT;
+
     printJsonObject(object, &indent_level);
 }
 
 
+#define SMART_BUFFER_SIGNATURE 0x53627566
+
+
 typedef struct _SMART_BUFFER {
 
+    int Signature;
     char *buffer;
     int buffer_length;
     int length_used;
@@ -466,6 +533,9 @@ static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb);
 
 static void stringifyJsonArray(JSON_VALUE *value, SMART_BUFFER *sb)
 {
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+    ASSERT(sb->Signature == SMART_BUFFER_SIGNATURE);
+
     sb->length_used += sprintf( sb->buffer + sb->length_used, "[");
 
     while (value) {
@@ -481,6 +551,9 @@ static void stringifyJsonArray(JSON_VALUE *value, SMART_BUFFER *sb)
 
 static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
 {
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+    ASSERT(sb->Signature == SMART_BUFFER_SIGNATURE);
+
     switch (value->Type) {
 
         case TYPE_OBJECT:
@@ -518,6 +591,9 @@ static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
 
 static void stringifyJsonMember(JSON_MEMBER *member, SMART_BUFFER *sb)
 {
+    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+    ASSERT(sb->Signature == SMART_BUFFER_SIGNATURE);
+
     sb->length_used += sprintf( sb->buffer + sb->length_used, "\"%s\":",
                                 member->Name);
     updateBuffer(sb);
@@ -531,6 +607,9 @@ static void stringifyJsonObject(JSON_OBJECT *object,
     //------------------------
     JSON_MEMBER *member;
     //------------------------
+
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
+    ASSERT(sb->Signature == SMART_BUFFER_SIGNATURE);
 
     updateBuffer(sb);
     sb->length_used += sprintf(sb->buffer + sb->length_used, "{");
@@ -555,6 +634,12 @@ char* JSON_Stringify(JSON_OBJECT *object)
     //-------------------------------
 
     JSON_Errno = SUCCESS;
+    sb.Signature = SMART_BUFFER_SIGNATURE;
+
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return NULL;
+    }
 
     rc = setjmp(stringify_jmp_buffer);
     if (rc == 0) {
@@ -578,6 +663,9 @@ static void freeJsonArray(JSON_VALUE *value)
     JSON_VALUE *next_value;
     //-----------------------------
 
+    ASSERT(value != NULL);
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+
     while (value) {
         next_value = value->Next;
         freeJsonValue(value);
@@ -588,6 +676,9 @@ static void freeJsonArray(JSON_VALUE *value)
 
 static void freeJsonValue(JSON_VALUE *value)
 {
+    ASSERT(value != NULL);
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+
     switch (value->Type) {
 
         case TYPE_OBJECT:
@@ -618,6 +709,9 @@ static void freeJsonValue(JSON_VALUE *value)
 
 static void freeJsonMember(JSON_MEMBER *member)
 {
+    ASSERT(member != NULL);
+    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+
     free(member->Name);
     freeJsonValue(member->Value);
 }
@@ -629,6 +723,9 @@ static void freeJsonObject(JSON_OBJECT *object)
     JSON_MEMBER *member;
     JSON_MEMBER *prev_member;
     //------------------------
+
+    ASSERT(object != NULL);
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
 
     member = object->Member;
     while (member) {
@@ -643,7 +740,14 @@ static void freeJsonObject(JSON_OBJECT *object)
 
 void JSON_FreeObject(JSON_OBJECT *object)
 {
-    freeJsonObject(object);
+    JSON_Errno = SUCCESS;
+
+    if (object->Signature == JSON_OBJECT_SIGNATURE) {
+        freeJsonObject(object);
+    }
+    else {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+    }
 }
 
 
@@ -652,6 +756,9 @@ static JSON_MEMBER *findJsonMemberInObject(JSON_OBJECT *object, char *name)
     //------------------------
     JSON_MEMBER *member;
     //------------------------
+
+    ASSERT(object != NULL);
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
 
     member = object->Member;
     while (member) {
@@ -670,6 +777,11 @@ static void addJsonMemberToObject(JSON_OBJECT *object, JSON_MEMBER *new_member)
     JSON_MEMBER *member;
     //------------------------
 
+    ASSERT(object != NULL);
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
+    ASSERT(new_member != NULL);
+    ASSERT(new_member->Signature == JSON_MEMBER_SIGNATURE);
+
     if (!object->Member) {
         object->Member = new_member;
         return;
@@ -686,116 +798,183 @@ static void addJsonMemberToObject(JSON_OBJECT *object, JSON_MEMBER *new_member)
 }
 
 
-static JSON_VALUE *findJsonValue(char *path, JSON_OBJECT *object)
-{
-    //------------------------
-    JSON_MEMBER *member;
-    char *name;
-    char *path_copy;
-    //------------------------
-
-    path_copy = strdup(path);
-
-    name = strtok(path_copy, ".");
-    member = findJsonMemberInObject(object, name);
-    if (!member)
-        goto FIND_FAILED;
-
-    while ((name = strtok(NULL, ".")) != NULL) {
-
-        if (member->Value->Type != TYPE_OBJECT)
-            goto FIND_FAILED;
-
-        member = findJsonMemberInObject(member->Value->Object, name);
-        if (!member)
-            goto FIND_FAILED;
-    }
-
-    // If we make it here, we found the value.
-    free(path_copy);
-    return member->Value;
-
-    // We didn't find the value, so cleanup.
-FIND_FAILED:
-    free(path_copy);
-    return NULL;
-}
+enum DOB_BRACKET_ORDER {
+    DOB_LAST_ELEMENT,
+    DOB_NEXT_OBJECT,
+    DOB_NEXT_ARRAY,
+};
 
 
 typedef struct DotOrBracket_ {
     char *Dot;
     char *Bracket;
-    int BracketFirst;
-    int DotFirst;
+    enum DOB_BRACKET_ORDER Order;
+    char *Path;
+    int ArrayIndex;
 }DotOrBracket;
 
 
-static int getNextDotOrBracket(char *path, DotOrBracket *dob)
+static int parseArrayIndex(DotOrBracket *dob)
 {
-    dob->Bracket = strchr(path, "[");
-    dob->Dot = strchr(path, ".");
+    //-----------------
+    char *endptr;
+    long index;
+    //-----------------
 
-    if (!dob->Dot && !dob->Bracket) {
-        dob->BracketFirst = 0;
-        dob->DotFirst = 1;
-    }
-    else if (!dob->Dot) {
-        dob->BracketFirst = 1;
-        dob->DotFirst = 0;
-    }
-    else if (!dob->Bracket) {
-        dob->BracketFirst = 0;
-        dob->DotFirst = 1;
-    }
-    else if (dob->Bracket > dob->Dot) {
-        dob->BracketFirst = 0;
-        dob->DotFirst = 1;
+    errno = 0;
+
+    index = strtol(dob->Path, &endptr, 0);
+
+    if (*endptr != ']') {
+        JSON_Errno = ERROR_INVALID_ARRAY;
+        return -1;
     }
     else {
-        dob->BracketFirst = 1;
-        dob->DotFirst = 0;
+        endptr++;
+        dob->Path = endptr;
     }
 
-    return path[0];
+    if (errno) {
+        JSON_Errno = ERROR_INVALID_ARRAY;
+        return -1;
+    }
+
+    return (int)index;
 }
 
 
-static JSON_VALUE *findJsonValue2(char *path, JSON_OBJECT *object)
+static char *getNextDotOrBracket(DotOrBracket *dob)
+{
+    //------------------
+    char *name;
+    //------------------
+
+    dob->Bracket = strchr(dob->Path, '[');
+    dob->Dot = strchr(dob->Path, '.');
+
+    if (!dob->Dot && !dob->Bracket) {
+        dob->Order = DOB_LAST_ELEMENT;
+        name = dob->Path;
+    }
+    else if (!dob->Dot) {
+        dob->Order = DOB_NEXT_ARRAY;
+        name = dob->Path;
+        *(dob->Bracket) = 0;
+        dob->Path = dob->Bracket + 1;
+        dob->ArrayIndex = parseArrayIndex(dob);
+    }
+    else if (!dob->Bracket) {
+        dob->Order = DOB_NEXT_OBJECT;
+        name = dob->Path;
+        *(dob->Dot) = 0;
+        dob->Path = dob->Dot + 1;
+    }
+    else if (dob->Bracket > dob->Dot) {
+        dob->Order = DOB_NEXT_OBJECT;
+        name = dob->Path;
+        *(dob->Dot) = 0;
+        dob->Path = dob->Dot + 1;
+    }
+    else {
+        dob->Order = DOB_NEXT_ARRAY;
+        name = dob->Path;
+        *(dob->Bracket) = 0;
+        dob->Path = dob->Bracket + 1;
+        dob->ArrayIndex = parseArrayIndex(dob);
+    }
+
+    return name;
+}
+
+
+JSON_VALUE *findJsonValueInArray(JSON_VALUE *value, int index)
+{
+    //------------------------
+    int i = 0;
+    //------------------------
+
+    while (i < index) {
+        value = value->Next;
+        if (!value)
+            return NULL;
+        i++;
+    }
+
+    return value;
+}
+
+
+static JSON_VALUE *findJsonValue(char *path, JSON_OBJECT *object)
 {
     //------------------------
     JSON_MEMBER *member;
+    JSON_VALUE *value;
     char *name;
     char *path_copy;
-    char *dot;
-    char *bracket;
     DotOrBracket dob;
     //------------------------
 
     path_copy = strdup(path);
-    path = path_copy;
+    dob.Path = path_copy;
 
-    while (getNextDotOrBracket(path, &dob)) {
+    while ((name = getNextDotOrBracket(&dob)) != NULL) {
 
-        if (dob.DotFirst) {
-            name = strtok(path, ".");
+        if (dob.Order == DOB_LAST_ELEMENT) {
+            member = findJsonMemberInObject(object, name);
+            if (!member) {
+                goto FIND_FAILED;
+            }
+            else if (member->Value->Type == TYPE_OBJECT) {
+                goto FIND_FAILED;
+            }
+            else {
+                value = member->Value;
+                break;
+            }
+        }
+        else if (dob.Order == DOB_NEXT_OBJECT) {
+            member = findJsonMemberInObject(object, name);
+            if (!member) {
+                goto FIND_FAILED;
+            }
+            else if (member->Value->Type != TYPE_OBJECT) {
+                goto FIND_FAILED;
+            }
+            else {
+                object = member->Value->Object;
+            }
+        }
+        else {
+            // dob.Order == DOB_NEXT_ARRAY
+            if (dob.ArrayIndex < 0) {
+                goto FIND_FAILED;
+            }
+
             member = findJsonMemberInObject(object, name);
             if (!member)
                 goto FIND_FAILED;
+
+            if (member->Value->Type != TYPE_ARRAY)
+                goto FIND_FAILED;
+            else
+                value = member->Value->Array;
+
+            value = findJsonValueInArray(value, dob.ArrayIndex);
+            if (!value)
+                goto FIND_FAILED;
+
+            if (value->Type == TYPE_OBJECT)
+                object = value->Object;
+            else if (value->Type == TYPE_ARRAY)
+                ;
+            else
+                break;
         }
-        else {
-            // dob.BracketFirst
-            name = strtok(path, "[");
-            //member = findJsonMemberInObject(object, name);
-            //if (!member)
-            //    goto FIND_FAILED;
-        }
-        if (path)
-            path = NULL;
     }
 
     // If we make it here, we found the value.
     free(path_copy);
-    return member->Value;
+    return value;
 
     // We didn't find the value, so cleanup.
 FIND_FAILED:
@@ -808,6 +987,8 @@ JSON_TYPE JSON_GetType(JSON_OBJECT *object, char *path)
     //------------------------
     JSON_VALUE *value;
     //------------------------
+
+    JSON_Errno = SUCCESS;
 
     value = findJsonValue(path, object);
 
@@ -906,12 +1087,7 @@ JSON_OBJECT *JSON_AllocObject(void)
 
     JSON_Errno = SUCCESS;
 
-    object = (JSON_OBJECT*) malloc(sizeof(JSON_OBJECT));
-    if (!object) {
-        JSON_Errno = ERROR_ALLOC_FAILED;
-        return NULL;
-    }
-    memset(object, 0, sizeof(JSON_OBJECT));
+    object = allocJsonObject();
 
     return object;
 }
@@ -923,17 +1099,14 @@ static JSON_MEMBER *allocJsonMemberAndValue(char *name)
     JSON_MEMBER *member;
     //------------------------
 
-    member = (JSON_MEMBER*) malloc(sizeof(JSON_MEMBER));
+    member = allocJsonMember();
     if (!member) {
-        JSON_Errno = ERROR_ALLOC_FAILED;
         return NULL;
     }
-    memset(member, 0, sizeof(JSON_MEMBER));
     member->Name = strdup(name);
 
     member->Value = allocJsonValue();
     if (!member->Value) {
-        JSON_Errno = ERROR_ALLOC_FAILED;
         free(member);
         return NULL;
     }
@@ -1059,81 +1232,4 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT *object, char *path, double value)
     return rc;
 }
 
-
-int main(void) {
-    char test1[] =
-            "{ \"x\" : true, \"y\": 123.456,\"z\": false, \"w\"\t:\"Hello World\"}";
-    char test2[] =
-            "{ \"x\" : true, \"y\": {\"y1\": \"Hello\", \"y2\" : \"World\", \"y3\" : true  }  }";
-    char test3[] =
-            "{ \"x1\" : {\"x2\" : 111, \"y2\" : {\"x3\":100, \"y3\":123, \"z3\":23}},"
-                    " \"y1\": {\"x2\": 1234, \"y2\" : 765  }  }";
-    char test4[] =
-            "{ \"A1\" : [1, 2, 3]  }";
-    char test5[] =
-            "{ \"A1\" : [\"Hi A String\", { \"obj\":56} , [12, 13, 14]]  }";
-
-    JSON_OBJECT *object;
-    char *buffer;
-    int b;
-
-    printf("JSON TEST\n");
-
-    object = JSON_Parse(test4);
-    JSON_Print(object);
-    buffer = JSON_Stringify(object);
-    printf("%s\n\n", buffer);
-    free(buffer);
-    JSON_FreeObject(object);
-
-    object = JSON_Parse(test5);
-    JSON_Print(object);
-    buffer = JSON_Stringify(object);
-    printf("%s\n\n", buffer);
-    free(buffer);
-    JSON_FreeObject(object);
-
-
-    object = JSON_Parse(test1);
-    JSON_Print(object);
-    buffer = JSON_Stringify(object);
-    printf("%s\n\n", buffer);
-    free(buffer);
-    b = JSON_GetBoolean(object, "x");
-    printf("JSON_GetBoolean x = %d\n", b);
-    b = JSON_GetBoolean(object, "z");
-    printf("JSON_GetBoolean x = %d\n", b);
-    b = JSON_GetBoolean(object, "unk");
-    printf("JSON_GetBoolean unk = %d\n", b);
-    JSON_FreeObject(object);
-
-    object = JSON_Parse(test2);
-    JSON_Print(object);
-    buffer = JSON_Stringify(object);
-    printf("%s\n\n", buffer);
-    free(buffer);
-    b = JSON_GetBoolean(object, "y.y3");
-    printf("JSON_GetBoolean y.y3 = %d\n", b);
-    JSON_FreeObject(object);
-
-    object = JSON_Parse(test3);
-    JSON_Print(object);
-    buffer = JSON_Stringify(object);
-    printf("%s\n\n", buffer);
-    free(buffer);
-    JSON_FreeObject(object);
-
-    object = JSON_AllocObject();
-    JSON_AddBoolean(object, "testBool2", 0);
-    JSON_AddBoolean(object, "testBool3", 0);
-    JSON_AddBoolean(object, "testBool1.sub1", 1);
-    JSON_AddBoolean(object, "testBool1.sub3", 1);
-    JSON_AddBoolean(object, "testBool1.sub2.x", 1);
-    JSON_AddString(object, "testBool1.sub4.ProductName", "C Programming");
-    JSON_AddNumber(object, "testBool1.sub4.ProductCost", 29.95);
-    JSON_Print(object);
-    JSON_FreeObject(object);
-
-    return 0;
-}
 
