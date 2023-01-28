@@ -990,6 +990,11 @@ JSON_TYPE JSON_GetType(JSON_OBJECT *object, char *path)
 
     JSON_Errno = SUCCESS;
 
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return TYPE_UNKNOWN;
+    }
+
     value = findJsonValue(path, object);
 
     if (value != NULL)
@@ -1006,6 +1011,11 @@ int JSON_GetBoolean(JSON_OBJECT *object, char *path)
     //------------------------
 
     JSON_Errno = SUCCESS;
+
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return 0;
+    }
 
     value = findJsonValue(path, object);
 
@@ -1027,6 +1037,11 @@ double JSON_GetNumber(JSON_OBJECT *object, char *path)
 
     JSON_Errno = SUCCESS;
 
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return -1;
+    }
+
     value = findJsonValue(path, object);
 
     if ((value != NULL) && (value->Type == TYPE_NUMBER)) {
@@ -1047,6 +1062,11 @@ char *JSON_GetString(JSON_OBJECT *object, char *path)
 
     JSON_Errno = SUCCESS;
 
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return NULL;
+    }
+
     value = findJsonValue(path, object);
 
     if ((value != NULL) && (value->Type == TYPE_STRING)) {
@@ -1066,6 +1086,11 @@ JSON_OBJECT *JSON_GetObject(JSON_OBJECT *object, char *path)
     //------------------------
 
     JSON_Errno = SUCCESS;
+
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return NULL;
+    }
 
     value = findJsonValue(path, object);
 
@@ -1125,6 +1150,8 @@ static JSON_ERROR jsonAddValue(JSON_OBJECT *object, char *path, JSON_VALUE value
     int member_should_be_object;
     JSON_ERROR rc = SUCCESS;
     //-----------------------------
+
+    ASSERT(object->Signature == JSON_OBJECT_SIGNATURE);
 
     path_copy = strdup(path);
 
@@ -1188,6 +1215,11 @@ JSON_ERROR JSON_AddBoolean(JSON_OBJECT *object, char *path, int value)
 
     JSON_Errno = SUCCESS;
 
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return JSON_Errno;
+    }
+
     json_value.Type = TYPE_BOOLEAN;
     json_value.Boolean = value ? 1 : 0;
 
@@ -1206,6 +1238,11 @@ JSON_ERROR JSON_AddString(JSON_OBJECT *object, char *path, char *value)
 
     JSON_Errno = SUCCESS;
 
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return JSON_Errno;
+    }
+
     json_value.Type = TYPE_STRING;
     json_value.String = strdup(value);
 
@@ -1223,6 +1260,11 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT *object, char *path, double value)
     //-----------------------------
 
     JSON_Errno = SUCCESS;
+
+    if (object->Signature != JSON_OBJECT_SIGNATURE) {
+        JSON_Errno = ERROR_INVALID_OBJECT;
+        return JSON_Errno;
+    }
 
     json_value.Type = TYPE_NUMBER;
     json_value.Number = value;
