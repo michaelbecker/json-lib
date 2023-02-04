@@ -2,22 +2,20 @@
 #define JSON_H__
 
 
-/* Forward decl's */
-struct _JSON_OBJECT;
-struct _JSON_ARRAY;
-
-
 typedef enum _JSON_TYPE {
+
     TYPE_UNKNOWN,
     TYPE_OBJECT,
     TYPE_STRING,
     TYPE_BOOLEAN,
     TYPE_ARRAY,
     TYPE_NUMBER
+
 } JSON_TYPE;
 
 
 typedef enum _JSON_ERROR {
+
     SUCCESS,
     ERROR_ALLOC_FAILED,
     ERROR_INVALID_STRING,
@@ -35,6 +33,10 @@ typedef enum _JSON_ERROR {
 #define JSON_VALUE_SIGNATURE 0x4A56414C
 
 
+// Forward Declaration
+struct _JSON_MEMBER;
+
+
 typedef struct _JSON_VALUE {
 
     int Signature;
@@ -45,11 +47,8 @@ typedef struct _JSON_VALUE {
         char *String;
         double Number;
         int Boolean;
-        struct _JSON_OBJECT *Object;
-        struct _JSON_VALUE *Array;
+        struct _JSON_MEMBER *Object;
     };
-
-    struct _JSON_VALUE *Next;
 
 } JSON_VALUE;
 
@@ -61,6 +60,8 @@ typedef struct _JSON_MEMBER {
 
     int Signature;
 
+    JSON_TYPE IsArray;
+
     char *Name;
     JSON_VALUE *Value;
     struct _JSON_MEMBER *Next;
@@ -68,37 +69,29 @@ typedef struct _JSON_MEMBER {
 } JSON_MEMBER;
 
 
-#define JSON_OBJECT_SIGNATURE 0x4A4F424A
+typedef JSON_MEMBER* JSON_OBJECT_HANDLE;
 
 
-typedef struct _JSON_OBJECT {
+JSON_OBJECT_HANDLE JSON_Parse(char *string);
+void JSON_Print(JSON_OBJECT_HANDLE object);
+char* JSON_Stringify(JSON_OBJECT_HANDLE object);
+void JSON_FreeObject(JSON_OBJECT_HANDLE object);
 
-    int Signature;
+JSON_TYPE JSON_GetType(JSON_OBJECT_HANDLE object, char *path);
+int JSON_GetBoolean(JSON_OBJECT_HANDLE object, char *name);
+double JSON_GetNumber(JSON_OBJECT_HANDLE object, char *path);
+char *JSON_GetString(JSON_OBJECT_HANDLE object, char *path);
+JSON_OBJECT_HANDLE JSON_GetObject(JSON_OBJECT_HANDLE object, char *path);
 
-    JSON_MEMBER *Member;
-
-} JSON_OBJECT;
-
-
-JSON_OBJECT* JSON_Parse(char *string);
-void JSON_Print(JSON_OBJECT *object);
-char* JSON_Stringify(JSON_OBJECT *object);
-void JSON_FreeObject(JSON_OBJECT *object);
-
-JSON_TYPE JSON_GetType(JSON_OBJECT *object, char *path);
-int JSON_GetBoolean(JSON_OBJECT *object, char *name);
-double JSON_GetNumber(JSON_OBJECT *object, char *path);
-char *JSON_GetString(JSON_OBJECT *object, char *path);
-JSON_OBJECT *JSON_GetObject(JSON_OBJECT *object, char *path);
-
-JSON_OBJECT *JSON_AllocObject(void);
-JSON_ERROR JSON_AddBoolean(JSON_OBJECT *object, char *name, int value);
-JSON_ERROR JSON_AddString(JSON_OBJECT *object, char *path, char *value);
-JSON_ERROR JSON_AddNumber(JSON_OBJECT *object, char *path, double value);
+JSON_OBJECT_HANDLE JSON_AllocObject(void);
+JSON_ERROR JSON_AddBoolean(JSON_OBJECT_HANDLE object, char *name, int value);
+JSON_ERROR JSON_AddString(JSON_OBJECT_HANDLE object, char *path, char *value);
+JSON_ERROR JSON_AddNumber(JSON_OBJECT_HANDLE object, char *path, double value);
 
 JSON_ERROR JSON_GetErrno(void);
 
 
+void JSONDBG_Print(JSON_OBJECT_HANDLE object);
 
 
 #endif
