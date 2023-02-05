@@ -59,9 +59,6 @@ typedef struct _JSON_VALUE {
 typedef struct _JSON_MEMBER {
 
     int Signature;
-
-    JSON_TYPE IsArray;
-
     char *Name;
     JSON_VALUE *Value;
     struct _JSON_MEMBER *Next;

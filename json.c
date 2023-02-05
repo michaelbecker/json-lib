@@ -256,7 +256,6 @@ static JSON_MEMBER* parseJsonObjectMember(char **cursor)
     if (!member){
         longjmp(parse_jmp_buffer, 1);
     }
-    member->IsArray = 0;
 
     // Get the name
     member->Name = parseJsonString(cursor);
@@ -287,7 +286,6 @@ static JSON_MEMBER* parseJsonArrayMember(char **cursor)
     if (!member){
         longjmp(parse_jmp_buffer, 1);
     }
-    member->IsArray = 1;
 
     // Get the value
     member->Value = parseJsonValue(cursor);
@@ -389,7 +387,6 @@ static void printJsonValue(JSON_VALUE *value, int *indent_level);
 static void printJsonArray(JSON_MEMBER *member, int *indent_level)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(member->IsArray);
 
     printf("[ ");
 
@@ -452,7 +449,6 @@ static void printJsonMember(JSON_MEMBER *member, int *indent_level)
 static void printJsonObject(JSON_MEMBER *member, int *indent_level)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(!member->IsArray);
 
     printf("{\n");
     (*indent_level)++;
@@ -511,16 +507,17 @@ static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level);
 static void dbgPrintJsonArray(JSON_MEMBER *member, int *indent_level)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(member->IsArray);
 
     printIndent(*indent_level);
-    printf("ARRAY [ ");
+    printf("ARRAY [\n");
+    (*indent_level)++;
 
     while (member) {
         dbgPrintJsonValue(member->Value, indent_level);
         member = member->Next;
     }
 
+    (*indent_level)--;
     printf("] ");
 }
 
@@ -570,8 +567,6 @@ static void dbgPrintJsonMember(JSON_MEMBER *member, int *indent_level)
 {
     printIndent(*indent_level);
     printf("Name: %s\n", member->Name);
-    printIndent(*indent_level);
-    printf("Is Array: %d\n", member->IsArray);
     dbgPrintJsonValue(member->Value, indent_level);
     printf("\n");
 }
@@ -580,7 +575,6 @@ static void dbgPrintJsonMember(JSON_MEMBER *member, int *indent_level)
 static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(!member->IsArray);
 
     printIndent(*indent_level);
     printf("OBJECT {\n");
@@ -591,7 +585,6 @@ static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level)
         member = member->Next;
     }
     (*indent_level)--;
-    printf("\n");
     printIndent(*indent_level);
     printf("}\n");
 }
@@ -668,7 +661,6 @@ static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb);
 static void stringifyJsonArray(JSON_MEMBER *member, SMART_BUFFER *sb)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(member->IsArray);
 
     sb->length_used += sprintf( sb->buffer + sb->length_used, "[");
 
@@ -738,7 +730,6 @@ static void stringifyJsonMember(JSON_MEMBER *member, SMART_BUFFER *sb)
 static void stringifyJsonObject(JSON_MEMBER *member, SMART_BUFFER *sb)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-    ASSERT(!member->IsArray);
 
     updateBuffer(sb);
     sb->length_used += sprintf(sb->buffer + sb->length_used, "{");
@@ -922,8 +913,9 @@ static void addJsonMemberToObject(JSON_MEMBER *member, JSON_MEMBER *new_member)
 
 enum DOB_BRACKET_ORDER {
     DOB_LAST_ELEMENT,
-    DOB_NEXT_OBJECT,
-    DOB_NEXT_ARRAY,
+    DOB_NEXT_IS_OBJECT,
+    DOB_NEXT_IS_NAMED_ARRAY,
+    DOB_NEXT_IS_NESTED_ARRAY,
 };
 
 
@@ -978,31 +970,49 @@ static char *getNextDotOrBracket(DotOrBracket *dob)
         dob->Order = DOB_LAST_ELEMENT;
         name = dob->Path;
     }
-    else if (!dob->Dot) {
-        dob->Order = DOB_NEXT_ARRAY;
-        name = dob->Path;
-        *(dob->Bracket) = 0;
-        dob->Path = dob->Bracket + 1;
-        dob->ArrayIndex = parseArrayIndex(dob);
-    }
     else if (!dob->Bracket) {
-        dob->Order = DOB_NEXT_OBJECT;
+        dob->Order = DOB_NEXT_IS_OBJECT;
         name = dob->Path;
         *(dob->Dot) = 0;
         dob->Path = dob->Dot + 1;
     }
+    else if (!dob->Dot) {
+        if (dob->Bracket == dob->Path) {
+            dob->Order = DOB_NEXT_IS_NESTED_ARRAY;
+            name = NULL;
+            *(dob->Bracket) = 0;
+            dob->Path = dob->Bracket + 1;
+            dob->ArrayIndex = parseArrayIndex(dob);
+        }
+        else {
+            dob->Order = DOB_NEXT_IS_NAMED_ARRAY;
+            name = dob->Path;
+            *(dob->Bracket) = 0;
+            dob->Path = dob->Bracket + 1;
+            dob->ArrayIndex = parseArrayIndex(dob);
+        }
+    }
     else if (dob->Bracket > dob->Dot) {
-        dob->Order = DOB_NEXT_OBJECT;
+        dob->Order = DOB_NEXT_IS_OBJECT;
         name = dob->Path;
         *(dob->Dot) = 0;
         dob->Path = dob->Dot + 1;
     }
     else {
-        dob->Order = DOB_NEXT_ARRAY;
-        name = dob->Path;
-        *(dob->Bracket) = 0;
-        dob->Path = dob->Bracket + 1;
-        dob->ArrayIndex = parseArrayIndex(dob);
+        if (dob->Bracket == dob->Path) {
+            dob->Order = DOB_NEXT_IS_NESTED_ARRAY;
+            name = NULL;
+            *(dob->Bracket) = 0;
+            dob->Path = dob->Bracket + 1;
+            dob->ArrayIndex = parseArrayIndex(dob);
+        }
+        else {
+            dob->Order = DOB_NEXT_IS_NAMED_ARRAY;
+            name = dob->Path;
+            *(dob->Bracket) = 0;
+            dob->Path = dob->Bracket + 1;
+            dob->ArrayIndex = parseArrayIndex(dob);
+        }
     }
 
     return name;
@@ -1038,58 +1048,93 @@ static JSON_VALUE *findJsonValue(char *path, JSON_MEMBER *member)
     path_copy = strdup(path);
     dob.Path = path_copy;
 
-    while ((name = getNextDotOrBracket(&dob)) != NULL) {
+    while (1) {
 
-        if (dob.Order == DOB_LAST_ELEMENT) {
-            member = findJsonMemberInObject(member, name);
-            if (!member) {
-                goto FIND_FAILED;
-            }
-            else if (member->Value->Type == TYPE_OBJECT) {
-                goto FIND_FAILED;
-            }
-            else {
-                value = member->Value;
+        name = getNextDotOrBracket(&dob);
+
+        switch(dob.Order) {
+
+            case DOB_LAST_ELEMENT:
+                member = findJsonMemberInObject(member, name);
+                if (!member) {
+                    goto FIND_FAILED;
+                }
+                else if (member->Value->Type == TYPE_OBJECT) {
+                    goto FIND_FAILED;
+                }
+                else {
+                    value = member->Value;
+                    goto EXIT;
+                }
+
+            case DOB_NEXT_IS_OBJECT:
+                member = findJsonMemberInObject(member, name);
+                if (!member) {
+                    goto FIND_FAILED;
+                }
+                else if (member->Value->Type != TYPE_OBJECT) {
+                    goto FIND_FAILED;
+                }
+                else {
+                    member = member->Value->Object;
+                    break;
+                }
+
+            case DOB_NEXT_IS_NAMED_ARRAY:
+                if (dob.ArrayIndex < 0) {
+                    goto FIND_FAILED;
+                }
+
+                value = findJsonValueInArray(member->Value->Object, dob.ArrayIndex);
+                if (!value)
+                    goto FIND_FAILED;
+
+                if (value->Type == TYPE_OBJECT) {
+                    member = value->Object;
+                    // Skip the next dot.
+                    dob.Path++;
+                }
+                else if (value->Type == TYPE_ARRAY) {
+                    // We have nested arrays here.
+                    member = value->Object;
+                }
+                else {
+                    //  We have the value. We can leave.
+                    goto EXIT;
+                }
                 break;
-            }
-        }
-        else if (dob.Order == DOB_NEXT_OBJECT) {
-            member = findJsonMemberInObject(member, name);
-            if (!member) {
-                goto FIND_FAILED;
-            }
-            else if (member->Value->Type != TYPE_OBJECT) {
-                goto FIND_FAILED;
-            }
-            else {
-                member = member->Value->Object;
-            }
-        }
-        else {
-            // dob.Order == DOB_NEXT_ARRAY
-            if (dob.ArrayIndex < 0) {
-                goto FIND_FAILED;
-            }
 
-            value = findJsonValueInArray(member->Value->Object, dob.ArrayIndex);
-            if (!value)
-                goto FIND_FAILED;
+            case DOB_NEXT_IS_NESTED_ARRAY:
 
-            if (value->Type == TYPE_OBJECT) {
-                member = value->Object;
-                // Skip the next dot.
-                dob.Path++;
-            }
-            else if (value->Type == TYPE_ARRAY) {
-                // We have nested arrays here.
-                member = value->Object;
-            }
-            else
-                //  We have the value. We can leave.
+                if (dob.ArrayIndex < 0) {
+                    goto FIND_FAILED;
+                }
+
+                value = findJsonValueInArray(member, dob.ArrayIndex);
+                if (!value)
+                    goto FIND_FAILED;
+
+                if (value->Type == TYPE_OBJECT) {
+                    member = value->Object;
+                    // Skip the next dot.
+                    dob.Path++;
+                }
+                else if (value->Type == TYPE_ARRAY) {
+                    // We have nested arrays here.
+                    member = value->Object;
+                }
+                else {
+                    //  We have the value. We can leave.
+                    goto EXIT;
+                }
+                break;
+
+            default:
                 break;
         }
     }
 
+EXIT:
     // If we make it here, we found the value.
     free(path_copy);
     return value;
