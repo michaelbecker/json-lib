@@ -24,7 +24,7 @@ void test1(void)
             "{ \"x\" : true, \"y\": 123.456,\"z\": false, \"w\"\t:\"Hello World\"}";
     //-----------------------------
 
-    printf("TEST 1\n----------------------------\n");
+    printf("\nTEST 1\n----------------------------\n");
     object = JSON_Parse(test);
     ASSERT(JSON_GetErrno() == SUCCESS);
 
@@ -65,7 +65,7 @@ void test2(void)
             "{ \"x\" : true, \"y\": {\"y1\": \"Hello\", \"y2\" : \"World\", \"y3\" : true  }  }";
     //-----------------------------
 
-    printf("TEST 2\n----------------------------\n");
+    printf("\nTEST 2\n----------------------------\n");
 
     object = JSON_Parse(test);
     ASSERT(JSON_GetErrno() == SUCCESS);
@@ -99,7 +99,7 @@ void test3(void)
                     " \"y1\": {\"x2\": 1234, \"y2\" : 765  }  }";
     //-----------------------------
 
-    printf("TEST 3\n----------------------------\n");
+    printf("\nTEST 3\n----------------------------\n");
 
     object = JSON_Parse(test);
     ASSERT(JSON_GetErrno() == SUCCESS);
@@ -129,7 +129,7 @@ void test4(void)
             "{ \"A1\" : [1, 2, 3]  }";
     //-----------------------------
 
-    printf("TEST 4\n----------------------------\n");
+    printf("\nTEST 4\n----------------------------\n");
 
     object = JSON_Parse(test);
     ASSERT(JSON_GetErrno() == SUCCESS);
@@ -176,7 +176,7 @@ void test5(void)
             "{ \"A1\" : [\"Hi A String\", { \"TheAnswer\":42} , [12, 13, 14]]  }";
     //---------------------------------
 
-    printf("TEST 5\n----------------------------\n");
+    printf("\nTEST 5\n----------------------------\n");
 
     object = JSON_Parse(test);
     ASSERT(JSON_GetErrno() == SUCCESS);
@@ -222,7 +222,7 @@ void test6(void)
     JSON_OBJECT_HANDLE object;
     //---------------------------------
 
-    printf("TEST 6\n----------------------------\n");
+    printf("\nTEST 6\n----------------------------\n");
 
     object = JSON_AllocObject();
     ASSERT(JSON_GetErrno() == SUCCESS);
@@ -257,10 +257,10 @@ void test6(void)
 int main(void) {
     printf("JSON TEST\n");
 
-//    test1();
-//    test2();
-//    test3();
-//    test4();
+    test1();
+    test2();
+    test3();
+    test4();
     test5();
     test6();
 

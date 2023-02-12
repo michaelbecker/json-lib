@@ -388,16 +388,23 @@ static void printJsonArray(JSON_MEMBER *member, int *indent_level)
 {
     ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
 
-    printf("[ ");
+    printf("[\n");
+    (*indent_level)++;
 
     while (member) {
+
+        printIndent(*indent_level);
         printJsonValue(member->Value, indent_level);
         member = member->Next;
         if (member)
-            printf(", ");
+            printf(",\n");
+        else
+            printf("\n");
     }
 
-    printf("] ");
+    (*indent_level)--;
+    printIndent(*indent_level);
+    printf("]");
 }
 
 
@@ -456,14 +463,14 @@ static void printJsonObject(JSON_MEMBER *member, int *indent_level)
     while (member) {
         printJsonMember(member, indent_level);
         member = member->Next;
-        if (member) {
+        if (member)
             printf(",\n");
-        }
+        else
+            printf("\n");
     }
     (*indent_level)--;
-    printf("\n");
     printIndent(*indent_level);
-    printf("}\n");
+    printf("}");
 }
 
 
@@ -481,6 +488,7 @@ void JSON_Print(JSON_OBJECT_HANDLE object)
         JSON_Errno = ERROR_INVALID_OBJECT;
 
     printJsonObject(member, &indent_level);
+    printf("\n");
 }
 
 
@@ -518,7 +526,8 @@ static void dbgPrintJsonArray(JSON_MEMBER *member, int *indent_level)
     }
 
     (*indent_level)--;
-    printf("] ");
+    printIndent(*indent_level);
+    printf("]\n");
 }
 
 
@@ -586,7 +595,7 @@ static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level)
     }
     (*indent_level)--;
     printIndent(*indent_level);
-    printf("}\n");
+    printf("}");
 }
 
 
@@ -604,7 +613,7 @@ void JSONDBG_Print(JSON_OBJECT_HANDLE object)
         JSON_Errno = ERROR_INVALID_OBJECT;
 
     dbgPrintJsonObject(member, &indent_level);
-
+    printf("\n");
 }
 
 
@@ -1292,7 +1301,7 @@ JSON_OBJECT_HANDLE JSON_AllocObject(void)
 }
 
 
-static JSON_ERROR jsonAddValue(JSON_MEMBER *member, char *path, JSON_VALUE *value)
+static JSON_ERROR jsonAddValue(JSON_MEMBER *root_member, char *path, JSON_VALUE *value)
 {
     //-----------------------------
     char *name1;
@@ -1300,10 +1309,11 @@ static JSON_ERROR jsonAddValue(JSON_MEMBER *member, char *path, JSON_VALUE *valu
     char *path_copy;
     int member_should_be_object;
     JSON_ERROR rc = SUCCESS;
+    JSON_MEMBER *found_member;
     JSON_MEMBER *new_member;
     //-----------------------------
 
-    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+    ASSERT(root_member->Signature == JSON_MEMBER_SIGNATURE);
 
     path_copy = strdup(path);
 
@@ -1316,37 +1326,64 @@ static JSON_ERROR jsonAddValue(JSON_MEMBER *member, char *path, JSON_VALUE *valu
         else
             member_should_be_object = 0;
 
-        member = findJsonMemberInObject(member, name1);
-        if (!member) {
+        //  We need to special case the first one, since we'll have an
+        //  empty Member at first.
+        if (!root_member->Name && !root_member->Value) {
+
+            root_member->Name = strdup(name1);
+
+            if (member_should_be_object) {
+                root_member->Value->Type = TYPE_OBJECT;
+                root_member->Value->Object = JSON_AllocObject();
+                name1 = name2;
+                root_member  = new_member;
+                continue;
+            }
+            else {
+                root_member->Value = value;
+                break;
+            }
+        }
+
+        found_member = findJsonMemberInObject(root_member, name1);
+        if (!found_member) {
 
             new_member = allocJsonMember();
-            if (!member) {
+            if (!new_member) {
                 rc = ERROR_ALLOC_FAILED;
                 break;
             }
             new_member->Name = strdup(name1);
 
-            addJsonMemberToObject(member, new_member);
+            addJsonMemberToObject(root_member, new_member);
             if (member_should_be_object) {
+                new_member->Value = allocJsonValue();
                 new_member->Value->Type = TYPE_OBJECT;
-                new_member->Value->Object = JSON_AllocObject();
+                new_member->Value->Object = allocJsonMember();
+                new_member->Value->Object->Name = strdup(name2);
                 name1 = name2;
-                member  = new_member;
+                root_member  = new_member->Value->Object;
             }
             else {
-                member->Value = value;
+                new_member->Value = value;
                 break;
             }
         }
+        // This is a value and there isn't any value in it.
+        else if (!member_should_be_object && !found_member->Value) {
+            found_member->Value = value;
+            break;
+        }
         else if (!member_should_be_object &&
-                  (member->Value->Type == value->Type)) {
-            member->Value = value;
+                  (found_member->Value->Type == value->Type)) {
+            free(found_member->Value);
+            found_member->Value = value;
             break;
         }
         else if (member_should_be_object &&
-                 (member->Value->Type == TYPE_OBJECT)) {
+                 (found_member->Value->Type == TYPE_OBJECT)) {
             name1 = name2;
-            member = member->Value->Object;
+            root_member = found_member->Value->Object;
         }
         else {
             rc = ERROR_TYPE_MISMATCH;
@@ -1452,5 +1489,4 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT_HANDLE object, char *path, double value)
 
     return rc;
 }
-
 
