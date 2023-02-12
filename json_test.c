@@ -276,7 +276,8 @@ void test6(void)
 
 
 int main(void) {
-    printf("JSON TEST\n");
+
+    printf("JSON UNIT TESTS\n\n");
 
     test1();
     test2();
@@ -284,6 +285,8 @@ int main(void) {
     test4();
     test5();
     test6();
+
+    printf("JSON Tests Pass.\n");
 
     return 0;
 }
