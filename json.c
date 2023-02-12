@@ -1,3 +1,24 @@
+//---------------------------------------------------------------------------
+//  json.c
+//
+//  This is the implementation of the JSON library.
+//
+//  (c)2023, Michael Becker <michael.f.becker@gmail.com>
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful, but
+//  WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+//  General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/>.
+//
+//---------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +35,39 @@
                         #_test_condition, __FILE__, __LINE__);  \
            abort();                                             \
        }
+
+
+#define JSON_VALUE_SIGNATURE 0x6C61764A
+
+
+typedef struct _JSON_VALUE {
+
+    int Signature;
+
+    JSON_TYPE Type;
+
+    union {
+        char *String;
+        double Number;
+        int Boolean;
+        struct _JSON_MEMBER *Object;
+    };
+
+} JSON_VALUE;
+
+
+#define JSON_MEMBER_SIGNATURE 0x6D656D4A
+
+
+typedef struct _JSON_MEMBER {
+
+    int Signature;
+    char *Name;
+    JSON_VALUE *Value;
+    struct _JSON_MEMBER *Next;
+
+} JSON_MEMBER;
+
 
 
 static jmp_buf parse_jmp_buffer;
@@ -380,7 +434,7 @@ static void printIndent(int indent_level)
 
 
 // Forward dec'l
-static void printJsonObject(JSON_OBJECT_HANDLE object, int *indent_level);
+static void printJsonObject(JSON_MEMBER *object, int *indent_level);
 static void printJsonValue(JSON_VALUE *value, int *indent_level);
 
 
@@ -504,116 +558,6 @@ static void dbgPrintType(JSON_TYPE type)
         case TYPE_NUMBER: printf("TYPE_NUMBER\n"); break;
         default: printf("Invalid!!!\n"); break;
     }
-}
-
-
-// Forward declarations
-static void dbgPrintJsonValue(JSON_VALUE *value, int *indent_level);
-static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level);
-
-
-static void dbgPrintJsonArray(JSON_MEMBER *member, int *indent_level)
-{
-    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-
-    printIndent(*indent_level);
-    printf("ARRAY [\n");
-    (*indent_level)++;
-
-    while (member) {
-        dbgPrintJsonValue(member->Value, indent_level);
-        member = member->Next;
-    }
-
-    (*indent_level)--;
-    printIndent(*indent_level);
-    printf("]\n");
-}
-
-
-static void dbgPrintJsonValue(JSON_VALUE *value, int *indent_level)
-{
-    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
-
-    printIndent(*indent_level);
-    dbgPrintType(value->Type);
-
-    switch (value->Type) {
-
-        case TYPE_OBJECT:
-            dbgPrintJsonObject(value->Object, indent_level);
-            break;
-
-        case TYPE_ARRAY:
-            dbgPrintJsonArray(value->Object, indent_level);
-            break;
-
-        case TYPE_STRING:
-            printIndent(*indent_level);
-            printf("String: %s\n", value->String);
-            break;
-
-        case TYPE_BOOLEAN:
-            printIndent(*indent_level);
-            if (value->Boolean)
-                printf("Boolean: true\n");
-            else
-                printf("Boolean: false\n");
-            break;
-
-        case TYPE_NUMBER:
-            printIndent(*indent_level);
-            printf("Number: %f\n", value->Number);
-            break;
-
-        default:
-            break;
-    }
-}
-
-
-static void dbgPrintJsonMember(JSON_MEMBER *member, int *indent_level)
-{
-    printIndent(*indent_level);
-    printf("Name: %s\n", member->Name);
-    dbgPrintJsonValue(member->Value, indent_level);
-    printf("\n");
-}
-
-
-static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level)
-{
-    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
-
-    printIndent(*indent_level);
-    printf("OBJECT {\n");
-    (*indent_level)++;
-
-    while (member) {
-        dbgPrintJsonMember(member, indent_level);
-        member = member->Next;
-    }
-    (*indent_level)--;
-    printIndent(*indent_level);
-    printf("}");
-}
-
-
-void JSONDBG_Print(JSON_OBJECT_HANDLE object)
-{
-    //--------------------------
-    int indent_level = 0;
-    JSON_MEMBER *member;
-    //--------------------------
-
-    JSON_Errno = SUCCESS;
-    member = object;
-
-    if (!object || member->Signature != JSON_MEMBER_SIGNATURE)
-        JSON_Errno = ERROR_INVALID_OBJECT;
-
-    dbgPrintJsonObject(member, &indent_level);
-    printf("\n");
 }
 
 
@@ -1270,6 +1214,11 @@ JSON_OBJECT_HANDLE JSON_GetObject(JSON_OBJECT_HANDLE object, char *path)
     JSON_Errno = SUCCESS;
     member = object;
 
+    if (!path) {
+        JSON_Errno = ERROR_INVALID_JSON_PATH;
+        return NULL;
+    }
+
     if (!object || member->Signature != JSON_MEMBER_SIGNATURE) {
         JSON_Errno = ERROR_INVALID_OBJECT;
         return NULL;
@@ -1409,6 +1358,11 @@ JSON_ERROR JSON_AddBoolean(JSON_OBJECT_HANDLE object, char *path, int value)
     JSON_Errno = SUCCESS;
     member = object;
 
+    if (!path) {
+        JSON_Errno = ERROR_INVALID_JSON_PATH;
+        return ERROR_INVALID_JSON_PATH;
+    }
+
     if (!object || member->Signature != JSON_MEMBER_SIGNATURE) {
         JSON_Errno = ERROR_INVALID_OBJECT;
         return JSON_Errno;
@@ -1439,6 +1393,11 @@ JSON_ERROR JSON_AddString(JSON_OBJECT_HANDLE object, char *path, char *value)
 
     JSON_Errno = SUCCESS;
     member = object;
+
+    if (!path) {
+        JSON_Errno = ERROR_INVALID_JSON_PATH;
+        return ERROR_INVALID_JSON_PATH;
+    }
 
     if (!object || member->Signature != JSON_MEMBER_SIGNATURE) {
         JSON_Errno = ERROR_INVALID_OBJECT;
@@ -1471,6 +1430,11 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT_HANDLE object, char *path, double value)
     JSON_Errno = SUCCESS;
     member = object;
 
+    if (!path) {
+        JSON_Errno = ERROR_INVALID_JSON_PATH;
+        return ERROR_INVALID_JSON_PATH;
+    }
+
     if (!object || member->Signature != JSON_MEMBER_SIGNATURE) {
         JSON_Errno = ERROR_INVALID_OBJECT;
         return JSON_Errno;
@@ -1490,3 +1454,116 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT_HANDLE object, char *path, double value)
     return rc;
 }
 
+
+#ifdef JSON_DBG_PRINT
+
+// Forward declarations
+static void dbgPrintJsonValue(JSON_VALUE *value, int *indent_level);
+static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level);
+
+
+static void dbgPrintJsonArray(JSON_MEMBER *member, int *indent_level)
+{
+    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+
+    printIndent(*indent_level);
+    printf("ARRAY [\n");
+    (*indent_level)++;
+
+    while (member) {
+        dbgPrintJsonValue(member->Value, indent_level);
+        member = member->Next;
+    }
+
+    (*indent_level)--;
+    printIndent(*indent_level);
+    printf("]\n");
+}
+
+
+static void dbgPrintJsonValue(JSON_VALUE *value, int *indent_level)
+{
+    ASSERT(value->Signature == JSON_VALUE_SIGNATURE);
+
+    printIndent(*indent_level);
+    dbgPrintType(value->Type);
+
+    switch (value->Type) {
+
+        case TYPE_OBJECT:
+            dbgPrintJsonObject(value->Object, indent_level);
+            break;
+
+        case TYPE_ARRAY:
+            dbgPrintJsonArray(value->Object, indent_level);
+            break;
+
+        case TYPE_STRING:
+            printIndent(*indent_level);
+            printf("String: %s\n", value->String);
+            break;
+
+        case TYPE_BOOLEAN:
+            printIndent(*indent_level);
+            if (value->Boolean)
+                printf("Boolean: true\n");
+            else
+                printf("Boolean: false\n");
+            break;
+
+        case TYPE_NUMBER:
+            printIndent(*indent_level);
+            printf("Number: %f\n", value->Number);
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+static void dbgPrintJsonMember(JSON_MEMBER *member, int *indent_level)
+{
+    printIndent(*indent_level);
+    printf("Name: %s\n", member->Name);
+    dbgPrintJsonValue(member->Value, indent_level);
+    printf("\n");
+}
+
+
+static void dbgPrintJsonObject(JSON_MEMBER *member, int *indent_level)
+{
+    ASSERT(member->Signature == JSON_MEMBER_SIGNATURE);
+
+    printIndent(*indent_level);
+    printf("OBJECT {\n");
+    (*indent_level)++;
+
+    while (member) {
+        dbgPrintJsonMember(member, indent_level);
+        member = member->Next;
+    }
+    (*indent_level)--;
+    printIndent(*indent_level);
+    printf("}");
+}
+
+
+void JSONDBG_Print(JSON_OBJECT_HANDLE object)
+{
+    //--------------------------
+    int indent_level = 0;
+    JSON_MEMBER *member;
+    //--------------------------
+
+    JSON_Errno = SUCCESS;
+    member = object;
+
+    if (!object || member->Signature != JSON_MEMBER_SIGNATURE)
+        JSON_Errno = ERROR_INVALID_OBJECT;
+
+    dbgPrintJsonObject(member, &indent_level);
+    printf("\n");
+}
+
+#endif
