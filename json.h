@@ -132,6 +132,7 @@ char* JSON_Stringify(JSON_OBJECT_HANDLE object);
 //---------------------------------------------------------------------------
 void JSON_FreeObject(JSON_OBJECT_HANDLE object);
 
+
 //---------------------------------------------------------------------------
 //
 //  JSON_GetType()
@@ -229,7 +230,7 @@ JSON_ERROR JSON_AddNumber(JSON_OBJECT_HANDLE object, char *path, double value);
 //
 //  JSON_GetErrno()
 //
-//  This function returns the JSON specific errno from teh last operation
+//  This function returns the JSON specific errno from the last operation
 //  performed.
 //
 //---------------------------------------------------------------------------

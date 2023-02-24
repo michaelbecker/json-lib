@@ -43,9 +43,7 @@
 typedef struct _JSON_VALUE {
 
     int Signature;
-
     JSON_TYPE Type;
-
     union {
         char *String;
         double Number;
@@ -67,7 +65,6 @@ typedef struct _JSON_MEMBER {
     struct _JSON_MEMBER *Next;
 
 } JSON_MEMBER;
-
 
 
 static jmp_buf parse_jmp_buffer;
@@ -420,6 +417,9 @@ JSON_OBJECT_HANDLE JSON_Parse(char *string)
 }
 
 
+# if defined (JSON_PRINT) || defined (JSON_DBG_PRINT)
+
+
 #define SPACES_PER_INDENTATION 4
 
 
@@ -431,6 +431,10 @@ static void printIndent(int indent_level)
             printf(" ");
 
 }
+#endif
+
+
+#ifdef JSON_PRINT
 
 
 // Forward dec'l
@@ -544,6 +548,7 @@ void JSON_Print(JSON_OBJECT_HANDLE object)
     printJsonObject(member, &indent_level);
     printf("\n");
 }
+#endif
 
 
 static void dbgPrintType(JSON_TYPE type)
@@ -650,9 +655,11 @@ static void stringifyJsonValue(JSON_VALUE *value, SMART_BUFFER *sb)
 
         case TYPE_BOOLEAN:
             if (value->Boolean)
-                sb->length_used += sprintf( sb->buffer + sb->length_used, "true");
+                sb->length_used += sprintf( sb->buffer + sb->length_used,
+                                            "true");
             else
-                sb->length_used += sprintf( sb->buffer + sb->length_used, "false");
+                sb->length_used += sprintf( sb->buffer + sb->length_used,
+                                            "false");
             break;
 
         case TYPE_NUMBER:
@@ -727,7 +734,7 @@ char* JSON_Stringify(JSON_OBJECT_HANDLE object)
 }
 
 
-// Forward decl
+// Forward declarations
 static void freeJsonObject(JSON_MEMBER *member);
 static void freeJsonValue(JSON_VALUE *value);
 static void freeJsonMember(JSON_MEMBER *member);
@@ -1008,6 +1015,7 @@ static JSON_VALUE *findJsonValue(char *path, JSON_MEMBER *member)
         switch(dob.Order) {
 
             case DOB_LAST_ELEMENT:
+
                 member = findJsonMemberInObject(member, name);
                 if (!member) {
                     goto FIND_FAILED;
@@ -1021,6 +1029,7 @@ static JSON_VALUE *findJsonValue(char *path, JSON_MEMBER *member)
                 }
 
             case DOB_NEXT_IS_OBJECT:
+
                 member = findJsonMemberInObject(member, name);
                 if (!member) {
                     goto FIND_FAILED;
@@ -1034,6 +1043,7 @@ static JSON_VALUE *findJsonValue(char *path, JSON_MEMBER *member)
                 }
 
             case DOB_NEXT_IS_NAMED_ARRAY:
+
                 if (dob.ArrayIndex < 0) {
                     goto FIND_FAILED;
                 }
